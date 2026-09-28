@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>韓国語 文字起こし</title>
+  <meta name="description" content="韓国語の音声をリアルタイムで文字起こし。インストール不要・無料。">
+  <meta name="theme-color" content="#16161d">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="文字起こし">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon.svg">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="bar">
+    <h1>한국어 <span>文字起こし</span></h1>
+    <div class="bar-actions">
+      <button id="fontBtn" class="icon-btn" type="button" aria-label="文字サイズ" title="文字サイズ">Aa</button>
+      <label class="toggle" title="時刻を表示">
+        <input id="tsToggle" type="checkbox"> 時刻
+      </label>
+    </div>
+  </header>
+
+  <main>
+    <div id="unsupported" class="notice" hidden>
+      このブラウザは音声認識に対応してないみたい。<br>
+      iPhone は <b>Safari</b>、PC/Android は <b>Chrome</b> か <b>Edge</b> で開いてね。
+    </div>
+
+    <ol id="lines" class="lines" aria-live="polite"></ol>
+    <p id="interim" class="interim" aria-hidden="true"></p>
+    <p id="empty" class="empty">下のマイクを押して韓国語を話してね 🎙️<br><span lang="ko">마이크를 누르고 말해 보세요</span></p>
+  </main>
+
+  <footer class="dock">
+    <div class="status-row">
+      <span id="status" class="status">待機中</span>
+      <span id="timer" class="timer">00:00</span>
+    </div>
+    <div class="controls">
+      <button id="copyBtn" class="tool" type="button" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
+        <span>コピー</span>
+      </button>
+      <button id="micBtn" class="mic" type="button" aria-pressed="false" aria-label="録音開始">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+      </button>
+      <button id="saveBtn" class="tool" type="button" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></svg>
+        <span>保存</span>
+      </button>
+    </div>
+    <div class="sub-controls">
+      <button id="translateAllBtn" class="link" type="button" disabled>全部を翻訳 ↗</button>
+      <button id="clearBtn" class="link danger" type="button" disabled>クリア</button>
+    </div>
+  </footer>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

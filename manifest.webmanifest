@@ -1,0 +1,15 @@
+{
+  "id": "./",
+  "name": "韓国語 文字起こし",
+  "short_name": "文字起こし",
+  "description": "韓国語の音声をリアルタイムで文字起こし。",
+  "lang": "ja",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#16161d",
+  "theme_color": "#16161d",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
