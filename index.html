@@ -22,6 +22,9 @@
       <label class="toggle" title="時刻を表示">
         <input id="tsToggle" type="checkbox"> 時刻
       </label>
+      <label class="toggle" title="日本語訳を表示">
+        <input id="trToggle" type="checkbox"> 訳
+      </label>
     </div>
   </header>
 
@@ -37,6 +40,10 @@
   </main>
 
   <footer class="dock">
+    <div id="sourceSwitch" class="source-switch" role="radiogroup" aria-label="音声の入力元" hidden>
+      <label><input type="radio" name="source" value="mic" checked><span>🎙️ マイク</span></label>
+      <label><input type="radio" name="source" value="tab"><span>🖥️ 配信・タブの音声</span></label>
+    </div>
     <div class="status-row">
       <span id="status" class="status">待機中</span>
       <span id="timer" class="timer">00:00</span>
@@ -55,7 +62,7 @@
       </button>
     </div>
     <div class="sub-controls">
-      <button id="translateAllBtn" class="link" type="button" disabled>全部を翻訳 ↗</button>
+      <button id="translateAllBtn" class="link" type="button" disabled>Google翻訳で開く ↗</button>
       <button id="clearBtn" class="link danger" type="button" disabled>クリア</button>
     </div>
   </footer>

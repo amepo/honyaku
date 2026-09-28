@@ -1,7 +1,7 @@
 /* オフラインでも画面が開けるようにアプリ本体をキャッシュする。
    ※ 音声認識そのものはブラウザ側のサービスなのでネット接続が必要。 */
-const VERSION = 'honyaku-v1';
-const SHELL = ['./', './index.html', './manifest.webmanifest', './css/style.css', './js/app.js', './js/transcript.js', './icons/icon.svg'];
+const VERSION = 'honyaku-v2';
+const SHELL = ['./', './index.html', './manifest.webmanifest', './css/style.css', './js/app.js', './js/transcript.js', './js/translate.js', './icons/icon.svg'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));

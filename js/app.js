@@ -1,4 +1,5 @@
 import { formatElapsed, splitResults, Transcript, translateUrl } from './transcript.js';
+import { builtinTranslator, googleTranslator, TranslationQueue } from './translate.js';
 
 const STORAGE_KEY = 'honyaku.transcript';
 const PREFS_KEY = 'honyaku.prefs';
@@ -8,7 +9,7 @@ const $ = id => document.getElementById(id);
 const els = {
   lines: $('lines'), interim: $('interim'), empty: $('empty'), unsupported: $('unsupported'),
   status: $('status'), timer: $('timer'), mic: $('micBtn'), copy: $('copyBtn'), save: $('saveBtn'),
-  clear: $('clearBtn'), translateAll: $('translateAllBtn'), font: $('fontBtn'), ts: $('tsToggle'),
+  clear: $('clearBtn'), translateAll: $('translateAllBtn'), font: $('fontBtn'), ts: $('tsToggle'), tr: $('trToggle'), sourceSwitch: $('sourceSwitch'),
   toast: $('toast'), main: document.querySelector('main'),
 };
 
@@ -17,20 +18,50 @@ const load = (key, fallback) => { try { return localStorage.getItem(key) ?? fall
 const store = (key, value) => { try { localStorage.setItem(key, value); } catch { /* ignore */ } };
 
 const transcript = Transcript.fromJSON(load(STORAGE_KEY, '[]'));
-const prefs = (() => { try { return { font: 1, ts: false, ...JSON.parse(load(PREFS_KEY, '{}')) }; } catch { return { font: 1, ts: false }; } })();
+const DEFAULT_PREFS = { font: 1, ts: false, tr: true, source: 'mic' };
+const prefs = (() => { try { return { ...DEFAULT_PREFS, ...JSON.parse(load(PREFS_KEY, '{}')) }; } catch { return { ...DEFAULT_PREFS }; } })();
 
 // ---------- rendering ----------
+const lineEls = new WeakMap(); // 行オブジェクト → <li>（翻訳が非同期で返ってきた時に更新するため）
+
 function renderLine(line, index) {
   const li = document.createElement('li');
   li.className = 'line';
   li.dataset.index = index;
-  li.innerHTML = `<time></time><p lang="ko"></p><div class="line-actions">
+  li.innerHTML = `<time></time><div class="body"><p class="ko" lang="ko"></p><p class="ja" lang="ja"></p></div>
+    <div class="line-actions">
     <button type="button" data-act="copy" title="この行をコピー">コピー</button>
-    <button type="button" data-act="translate" title="翻訳">訳</button>
+    <button type="button" data-act="translate" title="この行を翻訳し直す">訳</button>
     <button type="button" data-act="delete" title="削除">✕</button></div>`;
   li.querySelector('time').textContent = formatElapsed(line.at);
-  li.querySelector('p').textContent = line.text;
+  li.querySelector('.ko').textContent = line.text;
+  lineEls.set(line, li);
+  renderTranslation(line);
   return li;
+}
+
+/** 行の訳の表示を状態（訳あり / 翻訳中 / 失敗 / なし）に合わせる */
+function renderTranslation(line) {
+  const ja = lineEls.get(line)?.querySelector('.ja');
+  if (!ja) return;
+  ja.classList.remove('pending', 'error');
+  if (line.ja) {
+    ja.textContent = line.ja;
+  } else if (translating.has(line)) {
+    ja.textContent = '翻訳中…';
+    ja.classList.add('pending');
+  } else if (failed.has(line)) {
+    ja.textContent = '翻訳できなかった（「訳」で再試行）';
+    ja.classList.add('error');
+  } else {
+    ja.textContent = '';
+  }
+}
+
+function appendLine() {
+  const line = transcript.lines.at(-1);
+  els.lines.append(renderLine(line, transcript.lines.length - 1));
+  if (prefs.tr) requestTranslation(line);
 }
 
 function renderAll() {
@@ -63,8 +94,56 @@ function toast(msg) {
 function applyPrefs() {
   document.documentElement.style.setProperty('--font-size', `${FONT_SIZES[prefs.font] ?? 20}px`);
   document.body.classList.toggle('show-ts', prefs.ts);
+  document.body.classList.toggle('show-tr', prefs.tr);
   els.ts.checked = prefs.ts;
+  els.tr.checked = prefs.tr;
   store(PREFS_KEY, JSON.stringify(prefs));
+}
+
+// ---------- translation (韓国語 → 日本語) ----------
+const translating = new Set(); // 翻訳待ち・翻訳中の行
+const failed = new WeakSet();  // 失敗した行
+let translatorPromise = null;
+let engineAnnounced = false;
+
+// 端末内の Translator API が使えればそれ、ダメなら Google。一度決めたら使い回す
+function getTranslator() {
+  translatorPromise ??= builtinTranslator().then(t => t ?? googleTranslator());
+  return translatorPromise;
+}
+
+const queue = new TranslationQueue(getTranslator, {
+  onDone(line, ja, engine) {
+    translating.delete(line);
+    failed.delete(line);
+    if (!transcript.lines.includes(line)) return; // 翻訳中に消された
+    line.ja = ja;
+    persist();
+    renderTranslation(line);
+    if (!engineAnnounced) {
+      engineAnnounced = true;
+      toast(`翻訳エンジン: ${engine}`);
+    }
+  },
+  onError(line) {
+    translating.delete(line);
+    failed.add(line);
+    renderTranslation(line);
+    if (!navigator.onLine) toast('オフラインなので翻訳できないよ');
+  },
+});
+
+function requestTranslation(line, { force = false } = {}) {
+  if ((line.ja && !force) || translating.has(line)) return;
+  if (force) delete line.ja;
+  translating.add(line);
+  failed.delete(line);
+  renderTranslation(line);
+  queue.push(line);
+}
+
+function translateMissing() {
+  for (const line of transcript.lines) if (!line.ja) requestTranslation(line);
 }
 
 // ---------- speech recognition ----------
@@ -77,6 +156,59 @@ let elapsedBefore = 0;       // 一時停止前までの経過
 let timerId = null;
 let wakeLock = null;
 let restartTimes = [];
+let audioTrack = null;       // 「配信・タブの音声」モードで共有してもらった音声トラック
+
+// Chrome 139 前後から start(MediaStreamTrack) でマイク以外の音声を認識できる。
+// 対応していれば MediaStreamTrack 以外を渡すと TypeError になる（その場合は何も始まらない）
+let trackInputSupported;
+function supportsTrackInput() {
+  if (trackInputSupported !== undefined) return trackInputSupported;
+  const probe = new SR();
+  try {
+    probe.start(0);
+    probe.abort(); // 引数を無視して始まってしまった = 非対応
+    trackInputSupported = false;
+  } catch (e) {
+    trackInputSupported = e instanceof TypeError;
+  }
+  return trackInputSupported;
+}
+
+// PC の Chrome / Edge で画面共有が使えるときだけ入力元の切替を出す
+const canCaptureTab = !!navigator.mediaDevices?.getDisplayMedia && !/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
+
+/** タブ（配信ページ）の音声を共有してもらう。取れなかったら null */
+async function captureTabAudio() {
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getDisplayMedia({
+      video: true, // Chrome は video なしだと共有ダイアログを出せない
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+      systemAudio: 'include',
+      selfBrowserSurface: 'exclude',
+      preferCurrentTab: false,
+    });
+  } catch {
+    return null; // キャンセル
+  }
+  stream.getVideoTracks().forEach(t => t.stop()); // 映像は要らない
+  const track = stream.getAudioTracks()[0];
+  if (!track) {
+    toast('音声が取れなかった。共有画面で「タブの音声も共有する」をオンにしてね');
+    return null;
+  }
+  track.addEventListener('ended', () => {
+    if (!wanted) return;
+    stop();
+    toast('共有が終わったので停止したよ');
+  });
+  return track;
+}
+
+function startRecognition() {
+  if (prefs.source === 'tab' && audioTrack) recognition.start(audioTrack);
+  else recognition.start();
+}
 
 function elapsed() {
   return elapsedBefore + (sessionStart ? Date.now() - sessionStart : 0);
@@ -101,7 +233,7 @@ function createRecognition() {
     let added = false;
     for (const text of finals) {
       if (transcript.add(text, elapsed())) {
-        els.lines.append(renderLine(transcript.lines.at(-1), transcript.lines.length - 1));
+        appendLine();
         added = true;
       }
     }
@@ -137,7 +269,7 @@ function createRecognition() {
     // 確定しないまま切れた途中結果は捨てずに残す
     const pending = els.interim.textContent.trim();
     if (pending && transcript.add(pending, elapsed())) {
-      els.lines.append(renderLine(transcript.lines.at(-1), transcript.lines.length - 1));
+      appendLine();
       persist();
     }
     els.interim.textContent = '';
@@ -156,7 +288,7 @@ function createRecognition() {
     setStatus('再接続中…', true);
     setTimeout(() => {
       if (!wanted) return;
-      try { recognition.start(); } catch { /* already started */ }
+      try { startRecognition(); } catch { /* already started */ }
     }, 250);
   };
 
@@ -165,18 +297,28 @@ function createRecognition() {
 
 async function start() {
   if (!SR || wanted) return;
+  if (prefs.source === 'tab') {
+    if (!supportsTrackInput()) {
+      toast('このブラウザはタブ音声の認識に未対応。最新の Chrome / Edge で開いてね');
+      return;
+    }
+    audioTrack = await captureTabAudio();
+    if (!audioTrack) return;
+  }
   wanted = true;
   recognition ??= createRecognition();
   sessionStart = Date.now();
   restartTimes = [];
   try {
-    recognition.start();
+    startRecognition();
   } catch {
     /* already started */
   }
+  els.sourceSwitch.classList.add('locked');
+  for (const r of els.sourceSwitch.querySelectorAll('input')) r.disabled = true;
   els.mic.setAttribute('aria-pressed', 'true');
   els.mic.setAttribute('aria-label', '録音停止');
-  setStatus('マイク準備中…', true);
+  setStatus(prefs.source === 'tab' ? '音声準備中…' : 'マイク準備中…', true);
   timerId = setInterval(() => { els.timer.textContent = formatElapsed(elapsed()); }, 500);
   try { wakeLock = await navigator.wakeLock?.request('screen'); } catch { /* not supported */ }
   syncUi();
@@ -188,6 +330,10 @@ function stop() {
   elapsedBefore = elapsed();
   sessionStart = 0;
   try { recognition?.stop(); } catch { /* ignore */ }
+  audioTrack?.stop(); // 共有も終わらせる（ブラウザ上部の「共有中」バーが消える）
+  audioTrack = null;
+  els.sourceSwitch.classList.remove('locked');
+  for (const r of els.sourceSwitch.querySelectorAll('input')) r.disabled = false;
   clearInterval(timerId);
   els.mic.setAttribute('aria-pressed', 'false');
   els.mic.setAttribute('aria-label', '録音開始');
@@ -213,7 +359,7 @@ async function copyText(text) {
 }
 
 function saveFile() {
-  const text = transcript.toText({ timestamps: prefs.ts });
+  const text = transcript.toText({ timestamps: prefs.ts, translations: prefs.tr });
   const d = new Date();
   const stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}-${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}`;
   const blob = new Blob([text + '\n'], { type: 'text/plain;charset=utf-8' });
@@ -223,7 +369,7 @@ function saveFile() {
 }
 
 els.mic.addEventListener('click', () => (wanted ? stop() : start()));
-els.copy.addEventListener('click', () => copyText(transcript.toText({ timestamps: prefs.ts })));
+els.copy.addEventListener('click', () => copyText(transcript.toText({ timestamps: prefs.ts, translations: prefs.tr })));
 els.save.addEventListener('click', saveFile);
 els.translateAll.addEventListener('click', () => window.open(translateUrl(transcript.toText()), '_blank', 'noopener'));
 els.clear.addEventListener('click', () => {
@@ -243,14 +389,25 @@ els.ts.addEventListener('change', () => {
   prefs.ts = els.ts.checked;
   applyPrefs();
 });
+els.tr.addEventListener('change', () => {
+  prefs.tr = els.tr.checked;
+  applyPrefs();
+  if (prefs.tr) translateMissing(); // オンにした瞬間（ユーザー操作中）に端末内モデルの準備もできる
+});
 els.lines.addEventListener('click', e => {
   const btn = e.target.closest('button[data-act]');
   if (!btn) return;
   const index = Number(btn.closest('.line').dataset.index);
   const line = transcript.lines[index];
   if (!line) return;
-  if (btn.dataset.act === 'copy') copyText(line.text);
-  if (btn.dataset.act === 'translate') window.open(translateUrl(line.text), '_blank', 'noopener');
+  if (btn.dataset.act === 'copy') copyText(prefs.tr && line.ja ? `${line.text}\n${line.ja}` : line.text);
+  if (btn.dataset.act === 'translate') {
+    if (!prefs.tr) {
+      prefs.tr = true;
+      applyPrefs();
+    }
+    requestTranslation(line, { force: true });
+  }
   if (btn.dataset.act === 'delete') {
     transcript.remove(index);
     persist();
@@ -264,16 +421,37 @@ document.addEventListener('visibilitychange', async () => {
   }
 });
 
+function applySource() {
+  const tab = prefs.source === 'tab';
+  els.empty.innerHTML = tab
+    ? '配信を流しているタブを開いたまま、下のボタンを押して<br>共有したいタブを選んでね 🖥️<br><small>「タブの音声も共有する」をオンにするのを忘れずに</small>'
+    : '下のマイクを押して韓国語を話してね 🎙️<br><span lang="ko">마이크를 누르고 말해 보세요</span>';
+  els.mic.setAttribute('aria-label', tab ? 'タブ音声の文字起こしを開始' : '録音開始');
+}
+els.sourceSwitch.addEventListener('change', e => {
+  prefs.source = e.target.value;
+  applyPrefs();
+  applySource();
+});
+
 // ---------- boot ----------
 if (!SR) {
   els.unsupported.hidden = false;
   els.mic.disabled = true;
 }
+if (canCaptureTab && SR) {
+  els.sourceSwitch.hidden = false;
+} else {
+  prefs.source = 'mic';
+}
+els.sourceSwitch.querySelector(`input[value="${prefs.source}"]`).checked = true;
+applySource();
 if (transcript.lines.length) elapsedBefore = transcript.lines.at(-1).at + 1000;
 els.timer.textContent = formatElapsed(elapsedBefore);
 applyPrefs();
 renderAll();
 scrollToBottom();
+if (prefs.tr) translateMissing();
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});

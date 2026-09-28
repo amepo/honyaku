@@ -57,9 +57,13 @@ export class Transcript {
     return this.lines.length === 0;
   }
 
-  toText({ timestamps = false } = {}) {
+  /** translations: true なら訳がある行の下に「→ 訳」を付ける */
+  toText({ timestamps = false, translations = false } = {}) {
     return this.lines
-      .map(l => (timestamps ? `[${formatElapsed(l.at)}] ${l.text}` : l.text))
+      .map(l => {
+        const ko = timestamps ? `[${formatElapsed(l.at)}] ${l.text}` : l.text;
+        return translations && l.ja ? `${ko}\n→ ${l.ja}` : ko;
+      })
       .join('\n');
   }
 
