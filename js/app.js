@@ -1,13 +1,16 @@
 import { formatElapsed, splitResults, Transcript, translateUrl } from './transcript.js';
 import { builtinTranslator, googleTranslator, TranslationQueue } from './translate.js';
+import { reading } from './reading.js';
 
 const STORAGE_KEY = 'honyaku.transcript';
 const PREFS_KEY = 'honyaku.prefs';
 const FONT_SIZES = [16, 20, 26, 32];
+const READING_MODES = ['kana', 'roman', 'off'];
+const READING_LABELS = { kana: '読み:カナ', roman: '読み:ABC', off: '読み:—' };
 
 const $ = id => document.getElementById(id);
 const els = {
-  lines: $('lines'), interim: $('interim'), empty: $('empty'), unsupported: $('unsupported'),
+  lines: $('lines'), interim: $('interim'), interimYomi: $('interimYomi'), read: $('readBtn'), empty: $('empty'), unsupported: $('unsupported'),
   status: $('status'), timer: $('timer'), mic: $('micBtn'), copy: $('copyBtn'), save: $('saveBtn'),
   clear: $('clearBtn'), translateAll: $('translateAllBtn'), font: $('fontBtn'), ts: $('tsToggle'), tr: $('trToggle'), sourceSwitch: $('sourceSwitch'),
   toast: $('toast'), main: document.querySelector('main'),
@@ -18,7 +21,7 @@ const load = (key, fallback) => { try { return localStorage.getItem(key) ?? fall
 const store = (key, value) => { try { localStorage.setItem(key, value); } catch { /* ignore */ } };
 
 const transcript = Transcript.fromJSON(load(STORAGE_KEY, '[]'));
-const DEFAULT_PREFS = { font: 1, ts: false, tr: true, source: 'mic' };
+const DEFAULT_PREFS = { font: 1, ts: false, tr: true, source: 'mic', reading: 'kana' };
 const prefs = (() => { try { return { ...DEFAULT_PREFS, ...JSON.parse(load(PREFS_KEY, '{}')) }; } catch { return { ...DEFAULT_PREFS }; } })();
 
 // ---------- rendering ----------
@@ -28,13 +31,14 @@ function renderLine(line, index) {
   const li = document.createElement('li');
   li.className = 'line';
   li.dataset.index = index;
-  li.innerHTML = `<time></time><div class="body"><p class="ko" lang="ko"></p><p class="ja" lang="ja"></p></div>
+  li.innerHTML = `<time></time><div class="body"><p class="ko" lang="ko"></p><p class="yomi"></p><p class="ja" lang="ja"></p></div>
     <div class="line-actions">
     <button type="button" data-act="copy" title="この行をコピー">コピー</button>
     <button type="button" data-act="translate" title="この行を翻訳し直す">訳</button>
     <button type="button" data-act="delete" title="削除">✕</button></div>`;
   li.querySelector('time').textContent = formatElapsed(line.at);
   li.querySelector('.ko').textContent = line.text;
+  li.querySelector('.yomi').textContent = reading(line.text, prefs.reading);
   lineEls.set(line, li);
   renderTranslation(line);
   return li;
@@ -75,6 +79,20 @@ function syncUi() {
   for (const b of [els.copy, els.save, els.clear, els.translateAll]) b.disabled = empty;
 }
 
+function setInterim(text) {
+  els.interim.textContent = text;
+  els.interimYomi.textContent = reading(text, prefs.reading);
+}
+
+/** コピー・保存用のテキスト（画面に出しているものと同じ内容） */
+function exportText() {
+  return transcript.toText({
+    timestamps: prefs.ts,
+    translations: prefs.tr,
+    reading: prefs.reading === 'off' ? null : text => reading(text, prefs.reading),
+  });
+}
+
 function persist() {
   store(STORAGE_KEY, JSON.stringify(transcript));
 }
@@ -95,6 +113,8 @@ function applyPrefs() {
   document.documentElement.style.setProperty('--font-size', `${FONT_SIZES[prefs.font] ?? 20}px`);
   document.body.classList.toggle('show-ts', prefs.ts);
   document.body.classList.toggle('show-tr', prefs.tr);
+  document.body.classList.toggle('show-yomi', prefs.reading !== 'off');
+  els.read.textContent = READING_LABELS[prefs.reading] ?? READING_LABELS.kana;
   els.ts.checked = prefs.ts;
   els.tr.checked = prefs.tr;
   store(PREFS_KEY, JSON.stringify(prefs));
@@ -237,7 +257,7 @@ function createRecognition() {
         added = true;
       }
     }
-    els.interim.textContent = interim;
+    setInterim(interim);
     if (added) persist();
     syncUi();
     scrollToBottom();
@@ -272,7 +292,7 @@ function createRecognition() {
       appendLine();
       persist();
     }
-    els.interim.textContent = '';
+    setInterim('');
     syncUi();
 
     if (!wanted) return;
@@ -359,7 +379,7 @@ async function copyText(text) {
 }
 
 function saveFile() {
-  const text = transcript.toText({ timestamps: prefs.ts, translations: prefs.tr });
+  const text = exportText();
   const d = new Date();
   const stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}-${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}`;
   const blob = new Blob([text + '\n'], { type: 'text/plain;charset=utf-8' });
@@ -369,7 +389,7 @@ function saveFile() {
 }
 
 els.mic.addEventListener('click', () => (wanted ? stop() : start()));
-els.copy.addEventListener('click', () => copyText(transcript.toText({ timestamps: prefs.ts, translations: prefs.tr })));
+els.copy.addEventListener('click', () => copyText(exportText()));
 els.save.addEventListener('click', saveFile);
 els.translateAll.addEventListener('click', () => window.open(translateUrl(transcript.toText()), '_blank', 'noopener'));
 els.clear.addEventListener('click', () => {
@@ -379,6 +399,11 @@ els.clear.addEventListener('click', () => {
   if (wanted) sessionStart = Date.now();
   els.timer.textContent = '00:00';
   persist();
+  renderAll();
+});
+els.read.addEventListener('click', () => {
+  prefs.reading = READING_MODES[(READING_MODES.indexOf(prefs.reading) + 1) % READING_MODES.length];
+  applyPrefs();
   renderAll();
 });
 els.font.addEventListener('click', () => {
@@ -400,7 +425,7 @@ els.lines.addEventListener('click', e => {
   const index = Number(btn.closest('.line').dataset.index);
   const line = transcript.lines[index];
   if (!line) return;
-  if (btn.dataset.act === 'copy') copyText(prefs.tr && line.ja ? `${line.text}\n${line.ja}` : line.text);
+  if (btn.dataset.act === 'copy') copyText(new Transcript([line]).toText({ translations: prefs.tr, reading: prefs.reading === 'off' ? null : t => reading(t, prefs.reading) }));
   if (btn.dataset.act === 'translate') {
     if (!prefs.tr) {
       prefs.tr = true;

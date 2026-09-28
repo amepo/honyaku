@@ -49,6 +49,12 @@ test('Transcript text export with translations', () => {
   assert.equal(Transcript.fromJSON(JSON.stringify(t)).lines[0].ja, 'こんにちは');
 });
 
+test('Transcript text export with reading', () => {
+  const t = new Transcript([{ at: 0, text: '네', ja: 'はい' }]);
+  assert.equal(t.toText({ translations: true, reading: s => `R:${s}` }), '네\n（R:네）\n→ はい');
+  assert.equal(t.toText({ reading: () => '' }), '네');
+});
+
 test('Transcript.fromJSON tolerates garbage', () => {
   assert.equal(Transcript.fromJSON('not json').isEmpty, true);
   assert.equal(Transcript.fromJSON('{"a":1}').isEmpty, true);

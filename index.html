@@ -19,6 +19,7 @@
     <h1>한국어 <span>文字起こし</span></h1>
     <div class="bar-actions">
       <button id="fontBtn" class="icon-btn" type="button" aria-label="文字サイズ" title="文字サイズ">Aa</button>
+      <button id="readBtn" class="icon-btn" type="button" title="読みの表示（カナ → ローマ字 → なし）">読み</button>
       <label class="toggle" title="時刻を表示">
         <input id="tsToggle" type="checkbox"> 時刻
       </label>
@@ -35,7 +36,10 @@
     </div>
 
     <ol id="lines" class="lines" aria-live="polite"></ol>
-    <p id="interim" class="interim" aria-hidden="true"></p>
+    <div class="interim-wrap" aria-hidden="true">
+      <p id="interim" class="interim"></p>
+      <p id="interimYomi" class="interim-yomi"></p>
+    </div>
     <p id="empty" class="empty">下のマイクを押して韓国語を話してね 🎙️<br><span lang="ko">마이크를 누르고 말해 보세요</span></p>
   </main>
 
