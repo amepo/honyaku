@@ -120,3 +120,83 @@ body:not(.show-yomi) .interim-yomi { display: none; }
   background: rgb(20 20 28 / .9); color: #fff; padding: 8px 14px; border-radius: 999px; font-size: 14px;
   max-width: calc(100% - 32px); text-align: center;
 }
+
+
+.workspace-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--surface);
+  border-radius: 10px;
+  padding: 3px;
+  margin: 0 0 12px;
+  position: sticky;
+  top: -12px;
+  z-index: 2;
+}
+.workspace-tab {
+  flex: 1;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 600;
+}
+.workspace-tab.active {
+  background: var(--bg);
+  color: var(--text);
+}
+.provider-choice { white-space: nowrap; }
+.provider-choice select {
+  max-width: 94px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 3px 5px;
+  color: var(--text);
+  background: var(--surface);
+  font: inherit;
+}
+.speak-panel { max-width: 680px; margin: 0 auto; }
+.speak-intro, .phrase-status { color: var(--muted); font-size: 14px; line-height: 1.6; }
+#phraseForm { display: grid; gap: 8px; }
+#phraseForm label { font-size: 14px; font-weight: 600; }
+#phraseInput {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  color: var(--text);
+  background: var(--surface);
+  font: inherit;
+  line-height: 1.6;
+}
+.phrase-submit {
+  justify-self: start;
+  border: 0;
+  border-radius: 9px;
+  padding: 9px 14px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.phrase-status { min-height: 1.5em; margin: 8px 0; }
+.phrase-result {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.phrase-korean { margin: 0; font-size: calc(var(--font-size) * 1.15); line-height: 1.6; overflow-wrap: anywhere; }
+.phrase-reading { margin: 4px 0 0; color: var(--muted); font-size: calc(var(--font-size) * .8); line-height: 1.6; overflow-wrap: anywhere; }
+.phrase-actions { display: flex; gap: 16px; margin-top: 10px; }
+.phrase-actions .link { font-weight: 600; }
+[role="tabpanel"][hidden] { display: none; }
+
+@media (max-width: 440px) {
+  .bar { padding-left: 10px; padding-right: 10px; }
+  .bar h1 { font-size: 16px; }
+  .bar-actions { gap: 6px; }
+  .provider-choice select { max-width: 70px; }
+  .toggle { font-size: 12px; }
+}
