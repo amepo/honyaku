@@ -41,9 +41,19 @@
           <option value="auto">自動（端末内優先）</option>
           <option value="device">端末内のみ</option>
           <option value="google">Google</option>
+          <option value="papago">Papago</option>
         </select>
       </label>
     </div>
+    <details class="papago-settings">
+      <summary>Papago 接続設定</summary>
+      <p>Worker URL と利用トークンを設定します。利用トークンはこのタブの間だけ保存します。</p>
+      <label for="papagoEndpoint">Worker URL</label>
+      <input id="papagoEndpoint" type="url" inputmode="url" placeholder="https://honyaku-papago-proxy.example.workers.dev">
+      <label for="papagoToken">利用トークン</label>
+      <input id="papagoToken" type="password" autocomplete="off" placeholder="Worker に設定した PAPAGO_PROXY_TOKEN">
+      <button id="papagoSaveBtn" type="button">Papago 設定を保存</button>
+    </details>
     <section id="listenPanel" role="tabpanel" aria-labelledby="listenTab">
     <div id="unsupported" class="notice" hidden>
       このブラウザは音声認識に対応してないみたい。<br>
