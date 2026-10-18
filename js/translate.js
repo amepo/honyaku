@@ -108,3 +108,24 @@ export class TranslationQueue {
     await Promise.all(Array.from({ length: this.concurrency }, worker));
   }
 }
+
+
+const translatorCache = new Map();
+
+/** 指定された方法で翻訳器を返す。端末内翻訳はブラウザが対応しモデルを利用できる場合のみ使える。 */
+export function resolveTranslator(source, target, provider = 'auto') {
+  const key = `${source}:${target}:${provider}`;
+  if (!translatorCache.has(key)) {
+    const promise = (async () => {
+      if (provider === 'google') return googleTranslator({ source, target });
+      const local = await builtinTranslator({ source, target });
+      if (provider === 'device') {
+        if (!local) throw new Error('このブラウザでは端末内翻訳を利用できません');
+        return local;
+      }
+      return local ?? googleTranslator({ source, target });
+    })();
+    translatorCache.set(key, promise);
+  }
+  return translatorCache.get(key);
+}
