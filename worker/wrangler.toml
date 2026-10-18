@@ -2,7 +2,6 @@ name = "honyaku-papago-proxy"
 main = "src/index.js"
 compatibility_date = "2026-10-18"
 workers_dev = true
-secrets = ["PAPAGO_CLIENT_ID", "PAPAGO_CLIENT_SECRET", "PAPAGO_PROXY_TOKEN"]
 
 [vars]
 ALLOWED_ORIGINS = "https://amepo.github.io,http://localhost:5174"
