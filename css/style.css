@@ -200,3 +200,34 @@ body:not(.show-yomi) .interim-yomi { display: none; }
   .bar-actions { gap: 6px; }
 
 }
+
+
+.papago-settings {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.papago-settings summary { cursor: pointer; font-weight: 600; color: var(--text); }
+.papago-settings p { margin: 8px 0; line-height: 1.5; }
+.papago-settings label { display: block; margin-top: 8px; color: var(--text); }
+.papago-settings input {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface);
+  font: inherit;
+}
+.papago-settings button {
+  margin-top: 10px;
+  padding: 7px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
