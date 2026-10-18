@@ -26,10 +26,23 @@
       <label class="toggle" title="日本語訳を表示">
         <input id="trToggle" type="checkbox"> 訳
       </label>
+      <label class="toggle provider-choice" title="翻訳方法">
+        <span>翻訳</span>
+        <select id="providerSelect" aria-label="翻訳方法">
+          <option value="auto">自動</option>
+          <option value="device">端末内</option>
+          <option value="google">Google</option>
+        </select>
+      </label>
     </div>
   </header>
 
   <main>
+    <div class="workspace-tabs" role="tablist" aria-label="使い方">
+      <button id="listenTab" class="workspace-tab active" type="button" role="tab" aria-selected="true" aria-controls="listenPanel">聞く</button>
+      <button id="speakTab" class="workspace-tab" type="button" role="tab" aria-selected="false" aria-controls="speakPanel">話す</button>
+    </div>
+    <section id="listenPanel" role="tabpanel" aria-labelledby="listenTab">
     <div id="unsupported" class="notice" hidden>
       このブラウザは音声認識に対応してないみたい。<br>
       iPhone は <b>Safari</b>、PC/Android は <b>Chrome</b> か <b>Edge</b> で開いてね。
@@ -41,6 +54,24 @@
       <p id="interimYomi" class="interim-yomi"></p>
     </div>
     <p id="empty" class="empty">下のマイクを押して韓国語を話してね 🎙️<br><span lang="ko">마이크를 누르고 말해 보세요</span></p>
+    </section>
+    <section id="speakPanel" class="speak-panel" role="tabpanel" aria-labelledby="speakTab" hidden>
+      <p class="speak-intro">日本語で入力すると、韓国語訳と読み方を表示します。</p>
+      <form id="phraseForm">
+        <label for="phraseInput">伝えたいこと</label>
+        <textarea id="phraseInput" rows="4" placeholder="例: 今日は一緒に話せて楽しかったです"></textarea>
+        <button id="phraseTranslateBtn" class="phrase-submit" type="submit">韓国語に翻訳</button>
+      </form>
+      <p id="phraseStatus" class="phrase-status" role="status"></p>
+      <div id="phraseResult" class="phrase-result" hidden>
+        <p id="phraseKorean" class="phrase-korean" lang="ko"></p>
+        <p id="phraseReading" class="phrase-reading"></p>
+        <div class="phrase-actions">
+          <button id="phraseCopyBtn" class="link" type="button">韓国語をコピー</button>
+          <button id="phraseCopyReadingBtn" class="link" type="button">読みをコピー</button>
+        </div>
+      </div>
+    </section>
   </main>
 
   <footer class="dock">
