@@ -201,7 +201,7 @@ els.provider.addEventListener('change', () => {
 });
 
 els.papagoSave.addEventListener('click', () => {
-  const endpoint = els.papagoEndpoint.value.trim().replace(/\\/+$/, '');
+  const endpoint = els.papagoEndpoint.value.trim().replace(/\/+$/, '');
   const token = els.papagoToken.value.trim();
   if (!endpoint || !token) {
     toast('Worker URL と利用トークンを入力してね');
