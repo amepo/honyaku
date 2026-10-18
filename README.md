@@ -9,7 +9,7 @@
 - 無音でブラウザが止めても自動で再開（長時間の聞き取り向け）
 - **日本語訳をアプリ内で表示**（ヘッダーの「訳」でオン/オフ）。確定した行から自動翻訳（最大2件を並行処理し、会話中の待ちを抑制）
 - **話すタブ**: 日本語で言いたいことを入力すると、韓国語訳とカタカナ読みを表示。韓国語や読みをコピーできます
-- **翻訳方法を選択**: 自動（端末内を優先）、端末内のみ、Google。対応ブラウザなら日本語→韓国語も端末内で翻訳
+- **翻訳方法を選択**: 自動（端末内を優先）、端末内のみ、Google、Papago。対応ブラウザなら日本語→韓国語も翻訳
 - **配信・Discord 音声モード**（PC の Chrome / Edge）: Discord のタブ音声、対応環境では選択したアプリウィンドウの音声を入力にできる
 - **読み（発音）を表示**（ヘッダーの「読み」でカナ → ローマ字 → なし を切替）。
   綴りではなく実際の発音に寄せる（연음・비음화・유음화・격음화・경음화・구개음화 を適用。例: 감사합니다 → カムサハムニダ / gamsahamnida）。
@@ -47,6 +47,27 @@ npm test    # ロジックのユニットテスト（Node 22、依存なし）
 
 Google 翻訳は無料の非公式エンドポイント（`translate.googleapis.com`）を使うため、仕様変更や回数制限で失敗することがあります。翻訳に失敗した行は「訳」で再試行できます。
 
+### Papago を使う
+
+Papago は Naver Cloud のアカウントと Papago Translation API の利用設定が必要です。API キーを公開ページに置かないよう、Cloudflare Worker を中継として使います。Worker と Naver Cloud の利用料金・無料枠は各サービスの契約に従います。
+
+1. Naver Cloud Platform で Papago Translation API を有効にして、Client ID と Client Secret を用意します。
+2. [Cloudflare Workers](https://workers.cloudflare.com/) にログインできる状態で、このリポジトリの `worker` ディレクトリへ移動します。
+3. Mac のターミナルで、Worker とアプリの間で使う長いトークンを作ります: `openssl rand -hex 32`。この値は自分だけが保管してください。
+4. `cd worker` を実行してから、`npx wrangler login` と `npx wrangler deploy` を実行します。
+5. 次のコマンドをそれぞれ実行し、表示された入力欄に値を貼り付けます（値はコマンド行や Git に書きません）:
+
+   ```bash
+   npx wrangler secret put PAPAGO_CLIENT_ID
+   npx wrangler secret put PAPAGO_CLIENT_SECRET
+   npx wrangler secret put PAPAGO_PROXY_TOKEN
+   ```
+
+   `PAPAGO_PROXY_TOKEN` には手順 3 で作ったトークンを入力します。デプロイ先が `https://<worker名>.<account名>.workers.dev` の形式で表示されます。
+6. アプリの「翻訳方法」で **Papago** を選び、「Papago 接続設定」に Worker URL と同じ `PAPAGO_PROXY_TOKEN` を入力して保存します。
+
+トークンはブラウザの現在のタブを閉じるまでだけ保存されます。Worker URL は設定に保存されます。独自ドメインや別の公開元を使う場合は `worker/wrangler.toml` の `ALLOWED_ORIGINS` を変更して Worker を再デプロイしてください。
+
 ## GitHub Pages で公開
 
 `main` に push すると `.github/workflows/deploy-pages.yml` が自動デプロイします。
@@ -56,7 +77,7 @@ Google 翻訳は無料の非公式エンドポイント（`translate.googleapis.
 ## 注意・制限
 
 - 音声認識そのものはブラウザ（Apple / Google）のサーバーで処理されるので **ネット接続が必要**。音声はそれぞれのサービスに送られます。
-- Google 翻訳を選ぶか自動翻訳が Google に切り替わった場合、認識テキストや入力した日本語が Google に送られます。端末内翻訳が選ばれた場合は翻訳テキストを端末外に送信しません。
+- Google 翻訳を選ぶか自動翻訳が Google に切り替わった場合、認識テキストや入力した日本語が Google に送られます。Papago を選んだ場合は Worker を経由して Papago に送られます。端末内翻訳が選ばれた場合は翻訳テキストを端末外に送信しません。
 - BGM が大きい配信や、複数人が同時にしゃべる場面は精度が落ちます。
 - 精度・連続認識の安定性はブラウザ次第。iPhone Safari は数十秒ごとに区切られることがありますが、自動で再開します。
 - Firefox は非対応。
@@ -72,7 +93,7 @@ js/app.js           音声認識・UI
 js/transcript.js    文字起こしデータのロジック（DOM 非依存・テスト対象）
 js/translate.js     翻訳エンジンと翻訳キュー（DOM 非依存・テスト対象）
 js/reading.js       ハングル → カナ / ローマ字 の読み変換（DOM 非依存・テスト対象）
-sw.js               オフライン用 Service Worker
+worker/              Papago API キーを安全に扱う Cloudflare Worker\nsw.js               オフライン用 Service Worker
 tests/              node:test のユニットテスト
 tools/serve.js      依存なしの開発サーバー
 ```

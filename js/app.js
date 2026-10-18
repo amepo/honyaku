@@ -4,6 +4,7 @@ import { reading } from './reading.js';
 
 const STORAGE_KEY = 'honyaku.transcript';
 const PREFS_KEY = 'honyaku.prefs';
+const PAPAGO_TOKEN_KEY = 'honyaku.papagoToken';
 const FONT_SIZES = [16, 20, 26, 32];
 const READING_MODES = ['kana', 'roman', 'off'];
 const READING_LABELS = { kana: '読み:カナ', roman: '読み:ABC', off: '読み:—' };
@@ -17,14 +18,16 @@ const els = {
   provider: $('providerSelect'), listenTab: $('listenTab'), speakTab: $('speakTab'), listenPanel: $('listenPanel'), speakPanel: $('speakPanel'),
   phraseForm: $('phraseForm'), phraseInput: $('phraseInput'), phraseTranslate: $('phraseTranslateBtn'), phraseStatus: $('phraseStatus'),
   phraseResult: $('phraseResult'), phraseKorean: $('phraseKorean'), phraseReading: $('phraseReading'), phraseCopy: $('phraseCopyBtn'), phraseCopyReading: $('phraseCopyReadingBtn'),
+  papagoEndpoint: $('papagoEndpoint'), papagoToken: $('papagoToken'), papagoSave: $('papagoSaveBtn'),
 };
 
 // ---------- storage (best effort: private mode etc. may throw) ----------
 const load = (key, fallback) => { try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; } };
 const store = (key, value) => { try { localStorage.setItem(key, value); } catch { /* ignore */ } };
+const loadSession = key => { try { return sessionStorage.getItem(key) ?? ''; } catch { return ''; } };
 
 const transcript = Transcript.fromJSON(load(STORAGE_KEY, '[]'));
-const DEFAULT_PREFS = { font: 1, ts: false, tr: true, source: 'mic', reading: 'kana', provider: 'auto' };
+const DEFAULT_PREFS = { font: 1, ts: false, tr: true, source: 'mic', reading: 'kana', provider: 'auto', papagoEndpoint: '' };
 const prefs = (() => { try { return { ...DEFAULT_PREFS, ...JSON.parse(load(PREFS_KEY, '{}')) }; } catch { return { ...DEFAULT_PREFS }; } })();
 
 // ---------- rendering ----------
@@ -120,7 +123,7 @@ function applyPrefs() {
   els.read.textContent = READING_LABELS[prefs.reading] ?? READING_LABELS.kana;
   els.ts.checked = prefs.ts;
   els.tr.checked = prefs.tr;
-  els.provider.value = ['auto', 'device', 'google'].includes(prefs.provider) ? prefs.provider : 'auto';
+  els.provider.value = ['auto', 'device', 'google', 'papago'].includes(prefs.provider) ? prefs.provider : 'auto';
   store(PREFS_KEY, JSON.stringify(prefs));
 }
 
@@ -132,8 +135,12 @@ let engineAnnounced = false;
 let translatorErrorAnnounced = false;
 
 // 端末内の Translator API が使えればそれ、ダメなら Google。一度決めたら使い回す
+function papagoConfig() {
+  return { endpoint: prefs.papagoEndpoint, token: loadSession(PAPAGO_TOKEN_KEY) };
+}
+
 function getTranslator() {
-  translatorPromise ??= resolveTranslator('ko', 'ja', prefs.provider);
+  translatorPromise ??= resolveTranslator('ko', 'ja', prefs.provider, papagoConfig());
   return translatorPromise;
 }
 
@@ -193,6 +200,37 @@ els.provider.addEventListener('change', () => {
   applyPrefs();
 });
 
+els.papagoSave.addEventListener('click', () => {
+  const endpoint = els.papagoEndpoint.value.trim().replace(/\/+$/, '');
+  const token = els.papagoToken.value.trim();
+  if (!endpoint || !token) {
+    toast('Worker URL と利用トークンを入力してね');
+    return;
+  }
+  let parsed;
+  try {
+    parsed = new URL(endpoint);
+  } catch {
+    toast('Worker URL を確認してね');
+    return;
+  }
+  if (parsed.protocol !== 'https:' && parsed.hostname !== 'localhost') {
+    toast('Worker URL は HTTPS が必要です');
+    return;
+  }
+  try {
+    sessionStorage.setItem(PAPAGO_TOKEN_KEY, token);
+  } catch {
+    toast('このブラウザでは利用トークンを保存できません');
+    return;
+  }
+  prefs.papagoEndpoint = endpoint;
+  applyPrefs();
+  translatorPromise = null;
+  translatorErrorAnnounced = false;
+  toast('Papago 設定を保存しました（トークンはこのタブのみ）');
+});
+
 els.phraseForm.addEventListener('submit', async event => {
   event.preventDefault();
   const text = els.phraseInput.value.trim();
@@ -206,7 +244,7 @@ els.phraseForm.addEventListener('submit', async event => {
   els.phraseKorean.textContent = '翻訳中…';
   els.phraseReading.textContent = '';
   try {
-    const translator = await resolveTranslator('ja', 'ko', prefs.provider);
+    const translator = await resolveTranslator('ja', 'ko', prefs.provider, papagoConfig());
     const korean = await translator.translate(text);
     els.phraseKorean.textContent = korean;
     els.phraseReading.textContent = reading(korean, 'kana');
@@ -535,6 +573,8 @@ applySource();
 if (transcript.lines.length) elapsedBefore = transcript.lines.at(-1).at + 1000;
 els.timer.textContent = formatElapsed(elapsedBefore);
 applyPrefs();
+els.papagoEndpoint.value = prefs.papagoEndpoint || '';
+els.papagoToken.value = loadSession(PAPAGO_TOKEN_KEY);
 renderAll();
 scrollToBottom();
 if (prefs.tr) translateMissing();
