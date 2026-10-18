@@ -449,7 +449,7 @@ document.addEventListener('visibilitychange', async () => {
 function applySource() {
   const tab = prefs.source === 'tab';
   els.empty.innerHTML = tab
-    ? '配信を流しているタブを開いたまま、下のボタンを押して<br>共有したいタブを選んでね 🖥️<br><small>「タブの音声も共有する」をオンにするのを忘れずに</small>'
+    ? 'Discord のボイスチャットを開いて、下のボタンを押して<br>共有元に Discord の音声を選んでね 🖥️<br><small>タブ音声、または Windows ではシステム音声を共有</small>'
     : '下のマイクを押して韓国語を話してね 🎙️<br><span lang="ko">마이크를 누르고 말해 보세요</span>';
   els.mic.setAttribute('aria-label', tab ? 'タブ音声の文字起こしを開始' : '録音開始');
 }

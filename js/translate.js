@@ -54,14 +54,16 @@ export async function builtinTranslator({ source = 'ko', target = 'ja', api = gl
 }
 
 /**
- * 翻訳ジョブを 1 件ずつ順番に処理するキュー。
- * 同じ行（オブジェクト）が二重に積まれないようにし、結果は onDone / onError で返す。
+ * 翻訳ジョブを少数並列で処理するキュー。
+ * 1件ずつの直列待ちで会話中に翻訳が滞留しないようにする。
+ * 同じ行（オブジェクト）は二重に積まず、結果は onDone / onError で返す。
  */
 export class TranslationQueue {
-  constructor(getTranslator, { onDone, onError } = {}) {
+  constructor(getTranslator, { onDone, onError, concurrency = 2 } = {}) {
     this.getTranslator = getTranslator;
     this.onDone = onDone ?? (() => {});
     this.onError = onError ?? (() => {});
+    this.concurrency = Math.max(1, Math.floor(concurrency) || 1);
     this.pending = [];
     this.queued = new Set();
     this.running = null;
@@ -71,7 +73,16 @@ export class TranslationQueue {
     if (this.queued.has(item)) return;
     this.queued.add(item);
     this.pending.push(item);
-    this.running ??= this.#drain().finally(() => { this.running = null; });
+    this.#schedule();
+  }
+
+  #schedule() {
+    if (this.running) return;
+    this.running = this.#drain().finally(() => {
+      this.running = null;
+      // push と drain 完了が重なった場合も、残りを取りこぼさない
+      if (this.pending.length) this.#schedule();
+    });
   }
 
   /** 積まれている分が全部終わるまで待つ（テスト用） */
@@ -80,17 +91,20 @@ export class TranslationQueue {
   }
 
   async #drain() {
-    while (this.pending.length) {
-      const item = this.pending.shift();
-      try {
-        const translator = await this.getTranslator();
-        const ja = await translator.translate(item.text);
-        this.onDone(item, ja, translator.name);
-      } catch (err) {
-        this.onError(item, err);
-      } finally {
-        this.queued.delete(item);
+    const worker = async () => {
+      while (this.pending.length) {
+        const item = this.pending.shift();
+        try {
+          const translator = await this.getTranslator();
+          const ja = await translator.translate(item.text);
+          this.onDone(item, ja, translator.name);
+        } catch (err) {
+          this.onError(item, err);
+        } finally {
+          this.queued.delete(item);
+        }
       }
-    }
+    };
+    await Promise.all(Array.from({ length: this.concurrency }, worker));
   }
 }
