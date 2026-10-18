@@ -113,7 +113,50 @@ export class TranslationQueue {
 const translatorCache = new Map();
 
 /** 指定された方法で翻訳器を返す。端末内翻訳はブラウザが対応しモデルを利用できる場合のみ使える。 */
-export function resolveTranslator(source, target, provider = 'auto') {
+export function papagoTranslator({ endpoint, token, source, target, fetchImpl = globalThis.fetch } = {}) {
+  return {
+    name: 'Papago',
+    async translate(text) {
+      if (!endpoint || !token) throw new Error('Papago Worker のURLとトークンを設定してください');
+      let url;
+      try {
+        url = new URL(endpoint);
+      } catch {
+        throw new Error('Papago Worker のURLを確認してください');
+      }
+      if (url.protocol !== 'https:' && url.hostname !== 'localhost') {
+        throw new Error('Papago Worker のURLは HTTPS が必要です');
+      }
+      const base = endpoint.replace(/\\/+$/, '');
+      const apiUrl = base.endsWith('/translate') ? base : `${base}/translate`;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 20_000);
+      try {
+        const response = await fetchImpl(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ source, target, text }),
+          signal: controller.signal,
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || `Papago Worker error (HTTP ${response.status})`);
+        if (typeof data.translatedText !== 'string' || !data.translatedText.trim()) {
+          throw new Error('Papago から翻訳結果が返りませんでした');
+        }
+        return data.translatedText.trim();
+      } catch (error) {
+        if (error?.name === 'AbortError') throw new Error('Papago の応答がタイムアウトしました');
+        throw error;
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+  };
+}
+
+export function resolveTranslator(source, target, provider = 'auto', papago = {}) {
+  // 認証トークンを translatorCache のキーに含めないよう、Papago はキャッシュしない
+  if (provider === 'papago') return papagoTranslator({ ...papago, source, target });
   const key = `${source}:${target}:${provider}`;
   if (!translatorCache.has(key)) {
     const promise = (async () => {
