@@ -1,5 +1,5 @@
 import { formatElapsed, splitResults, Transcript, translateUrl } from './transcript.js';
-import { builtinTranslator, googleTranslator, TranslationQueue } from './translate.js';
+import { resolveTranslator, TranslationQueue } from './translate.js';
 import { reading } from './reading.js';
 
 const STORAGE_KEY = 'honyaku.transcript';
@@ -14,6 +14,9 @@ const els = {
   status: $('status'), timer: $('timer'), mic: $('micBtn'), copy: $('copyBtn'), save: $('saveBtn'),
   clear: $('clearBtn'), translateAll: $('translateAllBtn'), font: $('fontBtn'), ts: $('tsToggle'), tr: $('trToggle'), sourceSwitch: $('sourceSwitch'),
   toast: $('toast'), main: document.querySelector('main'),
+  provider: $('providerSelect'), listenTab: $('listenTab'), speakTab: $('speakTab'), listenPanel: $('listenPanel'), speakPanel: $('speakPanel'),
+  phraseForm: $('phraseForm'), phraseInput: $('phraseInput'), phraseTranslate: $('phraseTranslateBtn'), phraseStatus: $('phraseStatus'),
+  phraseResult: $('phraseResult'), phraseKorean: $('phraseKorean'), phraseReading: $('phraseReading'), phraseCopy: $('phraseCopyBtn'), phraseCopyReading: $('phraseCopyReadingBtn'),
 };
 
 // ---------- storage (best effort: private mode etc. may throw) ----------
@@ -21,7 +24,7 @@ const load = (key, fallback) => { try { return localStorage.getItem(key) ?? fall
 const store = (key, value) => { try { localStorage.setItem(key, value); } catch { /* ignore */ } };
 
 const transcript = Transcript.fromJSON(load(STORAGE_KEY, '[]'));
-const DEFAULT_PREFS = { font: 1, ts: false, tr: true, source: 'mic', reading: 'kana' };
+const DEFAULT_PREFS = { font: 1, ts: false, tr: true, source: 'mic', reading: 'kana', provider: 'auto' };
 const prefs = (() => { try { return { ...DEFAULT_PREFS, ...JSON.parse(load(PREFS_KEY, '{}')) }; } catch { return { ...DEFAULT_PREFS }; } })();
 
 // ---------- rendering ----------
@@ -117,6 +120,7 @@ function applyPrefs() {
   els.read.textContent = READING_LABELS[prefs.reading] ?? READING_LABELS.kana;
   els.ts.checked = prefs.ts;
   els.tr.checked = prefs.tr;
+  els.provider.value = ['auto', 'device', 'google'].includes(prefs.provider) ? prefs.provider : 'auto';
   store(PREFS_KEY, JSON.stringify(prefs));
 }
 
@@ -125,10 +129,11 @@ const translating = new Set(); // 翻訳待ち・翻訳中の行
 const failed = new WeakSet();  // 失敗した行
 let translatorPromise = null;
 let engineAnnounced = false;
+let translatorErrorAnnounced = false;
 
 // 端末内の Translator API が使えればそれ、ダメなら Google。一度決めたら使い回す
 function getTranslator() {
-  translatorPromise ??= builtinTranslator().then(t => t ?? googleTranslator());
+  translatorPromise ??= resolveTranslator('ko', 'ja', prefs.provider);
   return translatorPromise;
 }
 
@@ -145,11 +150,14 @@ const queue = new TranslationQueue(getTranslator, {
       toast(`翻訳エンジン: ${engine}`);
     }
   },
-  onError(line) {
+  onError(line, err) {
     translating.delete(line);
     failed.add(line);
     renderTranslation(line);
-    if (!navigator.onLine) toast('オフラインなので翻訳できないよ');
+    if (!translatorErrorAnnounced && err?.message) {
+      translatorErrorAnnounced = true;
+      toast(err.message);
+    } else if (!navigator.onLine) toast('オフラインなので翻訳できないよ');
   },
 });
 
@@ -165,6 +173,58 @@ function requestTranslation(line, { force = false } = {}) {
 function translateMissing() {
   for (const line of transcript.lines) if (!line.ja) requestTranslation(line);
 }
+
+
+function showWorkspace(showSpeak) {
+  els.listenPanel.hidden = showSpeak;
+  els.speakPanel.hidden = !showSpeak;
+  els.listenTab.classList.toggle('active', !showSpeak);
+  els.speakTab.classList.toggle('active', showSpeak);
+  els.listenTab.setAttribute('aria-selected', String(!showSpeak));
+  els.speakTab.setAttribute('aria-selected', String(showSpeak));
+}
+els.listenTab.addEventListener('click', () => showWorkspace(false));
+els.speakTab.addEventListener('click', () => showWorkspace(true));
+
+els.provider.addEventListener('change', () => {
+  prefs.provider = els.provider.value;
+  translatorPromise = null;
+  translatorErrorAnnounced = false;
+  applyPrefs();
+});
+
+els.phraseForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  const text = els.phraseInput.value.trim();
+  if (!text) {
+    els.phraseStatus.textContent = '日本語を入力してね';
+    return;
+  }
+  els.phraseTranslate.disabled = true;
+  els.phraseStatus.textContent = '韓国語に翻訳中…';
+  els.phraseResult.hidden = false;
+  els.phraseKorean.textContent = '翻訳中…';
+  els.phraseReading.textContent = '';
+  try {
+    const translator = await resolveTranslator('ja', 'ko', prefs.provider);
+    const korean = await translator.translate(text);
+    els.phraseKorean.textContent = korean;
+    els.phraseReading.textContent = reading(korean, 'kana');
+    els.phraseStatus.textContent = `翻訳方法: ${translator.name}`;
+  } catch (err) {
+    els.phraseKorean.textContent = '';
+    els.phraseReading.textContent = '';
+    els.phraseStatus.textContent = err?.message || '翻訳できませんでした';
+  } finally {
+    els.phraseTranslate.disabled = false;
+  }
+});
+els.phraseCopy.addEventListener('click', () => {
+  if (els.phraseKorean.textContent && els.phraseKorean.textContent !== '翻訳中…') copyText(els.phraseKorean.textContent);
+});
+els.phraseCopyReading.addEventListener('click', () => {
+  if (els.phraseReading.textContent) copyText(els.phraseReading.textContent);
+});
 
 // ---------- speech recognition ----------
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
