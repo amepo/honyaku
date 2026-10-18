@@ -146,7 +146,8 @@ body:not(.show-yomi) .interim-yomi { display: none; }
   background: var(--bg);
   color: var(--text);
 }
-.provider-choice { white-space: nowrap; }
+.translation-mode { display: flex; justify-content: flex-end; margin: -4px 0 10px; }
+.provider-choice { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; white-space: nowrap; }
 .provider-choice select {
   max-width: 94px;
   border: 1px solid var(--line);
@@ -197,6 +198,5 @@ body:not(.show-yomi) .interim-yomi { display: none; }
   .bar { padding-left: 10px; padding-right: 10px; }
   .bar h1 { font-size: 16px; }
   .bar-actions { gap: 6px; }
-  .provider-choice select { max-width: 70px; }
-  .toggle { font-size: 12px; }
+
 }
