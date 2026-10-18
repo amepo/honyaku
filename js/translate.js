@@ -127,7 +127,7 @@ export function papagoTranslator({ endpoint, token, source, target, fetchImpl = 
       if (url.protocol !== 'https:' && url.hostname !== 'localhost') {
         throw new Error('Papago Worker のURLは HTTPS が必要です');
       }
-      const base = endpoint.replace(/\\/+$/, '');
+      const base = endpoint.replace(/\/+$/, '');
       const apiUrl = base.endsWith('/translate') ? base : `${base}/translate`;
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 20_000);
