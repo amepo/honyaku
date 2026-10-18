@@ -205,6 +205,7 @@ async function captureTabAudio() {
       video: true, // Chrome は video なしだと共有ダイアログを出せない
       audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
       systemAudio: 'include',
+      windowAudio: 'window', // 対応ブラウザでは選択したアプリウィンドウの音声を共有できる
       selfBrowserSurface: 'exclude',
       preferCurrentTab: false,
     });
@@ -214,7 +215,7 @@ async function captureTabAudio() {
   stream.getVideoTracks().forEach(t => t.stop()); // 映像は要らない
   const track = stream.getAudioTracks()[0];
   if (!track) {
-    toast('音声が取れなかった。共有画面で「タブの音声も共有する」をオンにしてね');
+    toast('音声を共有できなかったよ。Discord のタブを選ぶか、Mac では Chrome の画面収録とシステムオーディオを許可してね');
     return null;
   }
   track.addEventListener('ended', () => {
@@ -449,7 +450,7 @@ document.addEventListener('visibilitychange', async () => {
 function applySource() {
   const tab = prefs.source === 'tab';
   els.empty.innerHTML = tab
-    ? 'Discord のボイスチャットを開いて、下のボタンを押して<br>共有元に Discord の音声を選んでね 🖥️<br><small>タブ音声、または Windows ではシステム音声を共有</small>'
+    ? 'Discord のボイスチャットを開いて、下のボタンを押して<br>共有元に Discord の音声を選んでね 🖥️<br><small>タブ音声、対応する Mac / Windows では共有ウィンドウの音声も選べるよ</small>'
     : '下のマイクを押して韓国語を話してね 🎙️<br><span lang="ko">마이크를 누르고 말해 보세요</span>';
   els.mic.setAttribute('aria-label', tab ? 'タブ音声の文字起こしを開始' : '録音開始');
 }
