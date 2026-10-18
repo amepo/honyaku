@@ -26,14 +26,6 @@
       <label class="toggle" title="日本語訳を表示">
         <input id="trToggle" type="checkbox"> 訳
       </label>
-      <label class="toggle provider-choice" title="翻訳方法">
-        <span>翻訳</span>
-        <select id="providerSelect" aria-label="翻訳方法">
-          <option value="auto">自動</option>
-          <option value="device">端末内</option>
-          <option value="google">Google</option>
-        </select>
-      </label>
     </div>
   </header>
 
@@ -41,6 +33,16 @@
     <div class="workspace-tabs" role="tablist" aria-label="使い方">
       <button id="listenTab" class="workspace-tab active" type="button" role="tab" aria-selected="true" aria-controls="listenPanel">聞く</button>
       <button id="speakTab" class="workspace-tab" type="button" role="tab" aria-selected="false" aria-controls="speakPanel">話す</button>
+    </div>
+    <div class="translation-mode">
+      <label class="provider-choice" for="providerSelect">
+        翻訳方法
+        <select id="providerSelect" aria-label="翻訳方法">
+          <option value="auto">自動（端末内優先）</option>
+          <option value="device">端末内のみ</option>
+          <option value="google">Google</option>
+        </select>
+      </label>
     </div>
     <section id="listenPanel" role="tabpanel" aria-labelledby="listenTab">
     <div id="unsupported" class="notice" hidden>
